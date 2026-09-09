@@ -1,0 +1,15 @@
+:80 {
+	encode gzip zstd
+
+	handle /v1* {
+		reverse_proxy api:3032
+	}
+
+	handle /doc* {
+		reverse_proxy api:3032
+	}
+
+	handle {
+		reverse_proxy view:3000
+	}
+}

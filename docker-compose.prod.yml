@@ -1,0 +1,109 @@
+name: fitra
+
+services:
+  fitra-pg:
+    image: postgres:18-alpine
+    container_name: fitra-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME}
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  fitra-redis:
+    image: redis:7-alpine
+    container_name: fitra-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ../api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./.env.production
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3032
+      DATABASE_HOST: fitra-pg
+      DATABASE_PORT: 5432
+      REDIS_HOST: fitra-redis
+      REDIS_PORT: 6379
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.fitra-api.rule=(Host(`${APP_DOMAIN}`) || Host(`www.${APP_DOMAIN}`)) && (PathPrefix(`/v1`) || PathPrefix(`/doc`))"
+      - traefik.http.routers.fitra-api.entrypoints=websecure
+      - traefik.http.routers.fitra-api.tls=true
+      - traefik.http.routers.fitra-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.fitra-api.tls.domains[0].main=${APP_DOMAIN}
+      - traefik.http.routers.fitra-api.tls.domains[0].sans=www.${APP_DOMAIN}
+      - traefik.http.routers.fitra-api.priority=100
+      - traefik.http.services.fitra-api.loadbalancer.server.port=3032
+    depends_on:
+      fitra-pg:
+        condition: service_healthy
+      fitra-redis:
+        condition: service_healthy
+
+  view:
+    build:
+      context: ../view
+      dockerfile: Dockerfile
+      args:
+        API_PROXY_TARGET: http://api:3032
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_INTERNAL_URL: http://api:3032/v1
+      API_PROXY_TARGET: http://api:3032
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.fitra-view.rule=Host(`${APP_DOMAIN}`) || Host(`www.${APP_DOMAIN}`)"
+      - traefik.http.routers.fitra-view.entrypoints=websecure
+      - traefik.http.routers.fitra-view.tls=true
+      - traefik.http.routers.fitra-view.tls.certresolver=letsencrypt
+      - traefik.http.routers.fitra-view.tls.domains[0].main=${APP_DOMAIN}
+      - traefik.http.routers.fitra-view.tls.domains[0].sans=www.${APP_DOMAIN}
+      - traefik.http.routers.fitra-view.priority=10
+      - traefik.http.services.fitra-view.loadbalancer.server.port=3000
+    depends_on:
+      - api
+
+  adminer:
+    image: adminer:5
+    container_name: fitra-adminer
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: fitra-pg
+      ADMINER_DESIGN: pepa-linha-dark
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.fitra-adminer.rule=Host(`db.${APP_DOMAIN}`)
+      - traefik.http.routers.fitra-adminer.entrypoints=websecure
+      - traefik.http.routers.fitra-adminer.tls=true
+      - traefik.http.routers.fitra-adminer.tls.certresolver=letsencrypt
+      - traefik.http.routers.fitra-adminer.tls.domains[0].main=db.${APP_DOMAIN}
+      - traefik.http.services.fitra-adminer.loadbalancer.server.port=8080
+    depends_on:
+      fitra-pg:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

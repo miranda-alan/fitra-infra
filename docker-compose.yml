@@ -1,0 +1,87 @@
+name: fitra
+
+services:
+  fitra-pg:
+    image: postgres:18-alpine
+    container_name: fitra-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fitra
+      POSTGRES_USER: fitra
+      POSTGRES_PASSWORD: sql@dev
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fitra -d fitra"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  fitra-redis:
+    image: redis:7-alpine
+    container_name: fitra-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ../api
+      dockerfile: Dockerfile
+    container_name: fitra-api
+    restart: unless-stopped
+    env_file:
+      - ../api/.env
+    environment:
+      NODE_ENV: production
+      DATABASE_HOST: fitra-pg
+      DATABASE_PORT: 5432
+      DATABASE_USER: fitra
+      DATABASE_PASSWORD: sql@dev
+      DATABASE_NAME: fitra
+      REDIS_HOST: fitra-redis
+      REDIS_PORT: 6379
+      HOST: 0.0.0.0
+      PORT: 3032
+    depends_on:
+      fitra-pg:
+        condition: service_healthy
+      fitra-redis:
+        condition: service_healthy
+
+  view:
+    build:
+      context: ../view
+      dockerfile: Dockerfile
+      args:
+        API_PROXY_TARGET: http://api:3032
+    container_name: fitra-view
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_INTERNAL_URL: http://api:3032/v1
+      API_PROXY_TARGET: http://api:3032
+    depends_on:
+      - api
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: fitra-caddy
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - api
+      - view
+
+volumes:
+  postgres_data:
+  redis_data:

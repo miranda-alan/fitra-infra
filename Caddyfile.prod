@@ -1,0 +1,22 @@
+{$APP_DOMAIN} {
+	encode gzip zstd
+
+	handle /v1* {
+		reverse_proxy api:3032
+	}
+
+	handle /doc* {
+		reverse_proxy api:3032
+	}
+
+	handle {
+		reverse_proxy view:3000
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}

@@ -29,92 +29,54 @@ Postgres e Redis nao publicam porta no host. Persistencia fica em volumes Docker
 
 Localmente o Caddy substitui o Traefik na porta `8080`, para nao conflitar com outras stacks na `80`.
 
-## Arquitetura C4
-
-### Contexto
-
-Pessoas e sistemas externos em volta do FITRA.
-
-```mermaid
-C4Context
-    title C4 - Contexto do FITRA
-
-    Person(atleta, "Atleta", "Registra treinos, medicoes e recordes pessoais.")
-    Person(personal, "Personal trainer", "Prescreve treinos para atletas vinculados.")
-    Person(ops, "Operador", "Faz deploy, backup e consulta o banco.")
-
-    System(fitra, "FITRA", "Acompanhamento de treinos, execucoes e evolucao do atleta.")
-
-    System_Ext(registrobr, "Registro.br", "DNS de fitra.com.br, www e db.")
-    System_Ext(letsencrypt, "Let's Encrypt", "Certificados TLS via Traefik.")
-
-    Rel(atleta, fitra, "Usa", "HTTPS")
-    Rel(personal, fitra, "Usa", "HTTPS")
-    Rel(ops, fitra, "Opera", "SSH e Adminer")
-    Rel(fitra, registrobr, "E resolvido por")
-    Rel(fitra, letsencrypt, "Obtem certificado")
-```
+## Arquitetura
 
 ### Containers
 
 Como o software e empacotado em producao. Traefik nao sobe neste compose; ele ja roda na VPS e entra pelos labels.
 
 ```mermaid
-C4Container
-    title C4 - Containers do FITRA (producao)
+flowchart TB
+  subgraph vps["VPS Hostinger"]
+    traefik["Traefik - proxy reverso, TLS"]
+    view["view - Next.js 14 :3000"]
+    api["api - NestJS 11 :3032"]
+    pg["fitra-pg - Postgres 18"]
+    redis["fitra-redis - Redis 7"]
+    adminer["adminer - Adminer 5"]
+  end
 
-    Person(usuario, "Usuario", "Atleta, personal ou operador no navegador.")
-
-    System_Boundary(vps, "VPS Hostinger") {
-        Container(traefik, "Traefik", "Proxy reverso", "TLS, HTTP para HTTPS, roteamento por host e path.")
-        Container(view, "view", "Next.js 14", "Interface web. Porta 3000.")
-        Container(api, "api", "NestJS 11", "API REST, JWT, migrations. Porta 3032.")
-        ContainerDb(pg, "fitra-pg", "Postgres 18", "Dados da aplicacao. Sem porta no host.")
-        ContainerDb(redis, "fitra-redis", "Redis 7", "Cache e apoio da API. AOF ligado.")
-        Container(adminer, "adminer", "Adminer 5", "UI do banco em db.fitra.com.br.")
-    }
-
-    Rel(usuario, traefik, "HTTPS", "443")
-    Rel(traefik, view, "Host fitra.com.br", "3000")
-    Rel(traefik, api, "/v1 e /doc", "3032")
-    Rel(traefik, adminer, "Host db.fitra.com.br", "8080")
-    Rel(view, api, "Proxy interno", "http://api:3032")
-    Rel(api, pg, "SQL", "5432")
-    Rel(api, redis, "Redis", "6379")
-    Rel(adminer, pg, "SQL", "5432")
+  traefik -->|fitra.com.br| view
+  traefik -->|/v1 e /doc| api
+  traefik -->|db.fitra.com.br| adminer
+  view -->|http://api:3032| api
+  api -->|5432| pg
+  api -->|6379| redis
+  adminer -->|5432| pg
 ```
 
 ### Deploy
 
-Onde cada peca vive.
+Onde cada peca vive na VPS.
 
 ```mermaid
-C4Deployment
-    title C4 - Deploy do FITRA
+flowchart TB
+  subgraph hostinger["VPS Hostinger - /opt/fitra"]
+    subgraph traefikNode["Traefik ja existente"]
+      edge["Roteamento TLS - fitra.com.br, www, db"]
+    end
+    subgraph compose["docker-compose.prod.yml"]
+      viewC["fitra-view :3000"]
+      apiC["fitra-api :3032"]
+      pgC["fitra-pg - volume postgres_data"]
+      redisC["fitra-redis - volume redis_data"]
+      adminerC["fitra-adminer :8080"]
+    end
+  end
 
-    Deployment_Node(dns, "Registro.br", "Zona DNS fitra.com.br") {
-        Deployment_Node(records, "Registros A/CNAME", "apex, www, db -> IP da VPS")
-    }
-
-    Deployment_Node(hostinger, "Hostinger", "VPS com Docker") {
-        Deployment_Node(opt, "/opt/fitra", "api, view e infra como irmaos") {
-            Deployment_Node(traefik_node, "Traefik (ja existente)", "entrypoints web/websecure, certresolver letsencrypt") {
-                Container(edge, "Roteamento", "Labels Docker", "fitra.com.br, www e db.fitra.com.br")
-            }
-            Deployment_Node(compose, "docker-compose.prod.yml", "Rede Docker da stack fitra") {
-                Container(view_c, "fitra-view", "Next.js", ":3000")
-                Container(api_c, "fitra-api", "NestJS", ":3032")
-                ContainerDb(pg_c, "fitra-pg", "Postgres 18", "volume postgres_data")
-                ContainerDb(redis_c, "fitra-redis", "Redis 7", "volume redis_data")
-                Container(adminer_c, "fitra-adminer", "Adminer", ":8080")
-            }
-        }
-    }
-
-    Rel(records, hostinger, "Resolve para o IP publico")
-    Rel(edge, view_c, "Demais paths")
-    Rel(edge, api_c, "/v1 e /doc")
-    Rel(edge, adminer_c, "db.fitra.com.br")
+  edge --> viewC
+  edge -->|/v1 e /doc| apiC
+  edge -->|db.fitra.com.br| adminerC
 ```
 
 Em desenvolvimento, o Caddy (`Caddyfile`) ocupa o lugar do Traefik e escuta em `localhost:8080`. O arquivo `Caddyfile.prod` nao e usado na Hostinger.

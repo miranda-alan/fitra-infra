@@ -95,11 +95,11 @@ Com seed:
 ./deploy.sh dev seed
 ```
 
-Producao:
+Producao (primeiro go-live com seed, sem medidas de exemplo):
 
 ```bash
 cp .env.production.example .env.production
-./deploy.sh prod
+./deploy.sh prod seed
 ```
 
 ## 1) Subir ambiente local
@@ -135,7 +135,9 @@ docker compose exec api npm run apply-db-migrations
 docker compose exec api npm run apply-db-seeds
 ```
 
-Usuario admin criado pelo seed: `admin@admin.com` / `12345`.
+O seed cria o admin (`admin@admin.com` / `12345`), o catalogo de exercicios e os tipos de medidas (Peso, massa muscular, gordura, IMC, cintura, quadril, etc.).
+
+Em desenvolvimento (`./deploy.sh dev seed`) tambem popula medidas de exemplo do admin. Em producao (`./deploy.sh prod seed`) essas medidas nao sao inseridas: `body_measurements` fica vazio para o time registrar as medicoes reais.
 
 ## 3) Producao (VPS Hostinger)
 
@@ -158,7 +160,7 @@ cd /opt/fitra/infra
 cp .env.production.example .env.production
 ```
 
-3. Defina `APP_DOMAIN=fitra.com.br` e ajuste senhas e `JWT_SECRET`.
+3. Defina `APP_DOMAIN=fitra.com.br` e ajuste senhas e `JWT_SECRET`. Use `LOG_LEVEL=log` (a API nao aceita `info`).
 
 4. Suba os servicos:
 
@@ -166,7 +168,9 @@ cp .env.production.example .env.production
 ./deploy.sh prod seed
 ```
 
-Atualizacao depois do primeiro deploy: `./deploy.sh prod` (o script puxa a `main` dos tres repos, reconstroi e sobe os containers).
+O seed de producao cria admin, exercicios e tipos de medidas. Nao popula medidas de exemplo. Troque a senha do admin (`12345`) depois do primeiro login.
+
+Atualizacao depois do primeiro deploy: `./deploy.sh prod` (o script puxa a `main` dos tres repos, reconstroi e sobe os containers; migrations sim, seed nao).
 
 ## 3.1) Adminer (gerenciar o banco pelo navegador)
 

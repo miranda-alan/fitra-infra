@@ -25,7 +25,7 @@ Na borda usamos o Traefik ja existente na VPS (nao o Caddy). O Traefik descobre 
 | `https://fitra.com.br/v1` e `/doc` | api (NestJS) |
 | `https://db.fitra.com.br` | Adminer (Postgres na rede Docker) |
 
-Postgres e Redis nao publicam porta no host. Persistencia fica em volumes Docker (`postgres_data`, `redis_data`). Deploy e `./deploy.sh prod` a partir de `/opt/fitra/infra`: build, sobe a stack e aplica migrations.
+Postgres e Redis nao publicam porta no host. Persistencia fica em volumes Docker (`postgres_data`, `redis_data`). Deploy e so `./deploy.sh prod` a partir de `/opt/fitra/infra`: atualiza `api`, `view` e `infra` na `main`, faz build, sobe a stack e aplica migrations.
 
 Localmente o Caddy substitui o Traefik na porta `8080`, para nao conflitar com outras stacks na `80`.
 
@@ -166,7 +166,7 @@ cp .env.production.example .env.production
 ./deploy.sh prod seed
 ```
 
-Atualizacao depois do primeiro deploy: `git pull` nos tres repos e `./deploy.sh prod` de novo.
+Atualizacao depois do primeiro deploy: `./deploy.sh prod` (o script puxa a `main` dos tres repos, reconstroi e sobe os containers).
 
 ## 3.1) Adminer (gerenciar o banco pelo navegador)
 

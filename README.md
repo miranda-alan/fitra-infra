@@ -102,6 +102,12 @@ cp .env.production.example .env.production
 ./deploy.sh prod seed
 ```
 
+Atualizar producao (stack ja no ar):
+
+```bash
+./deploy.sh prod
+```
+
 ## 1) Subir ambiente local
 
 ```bash
@@ -170,9 +176,33 @@ cp .env.production.example .env.production
 
 O seed de producao cria admin, exercicios e tipos de medidas. Nao popula medidas de exemplo. Troque a senha do admin (`12345`) depois do primeiro login.
 
-Atualizacao depois do primeiro deploy: `./deploy.sh prod` (o script puxa a `main` dos tres repos, reconstroi e sobe os containers; migrations sim, seed nao).
+## 3.1) Atualizar producao (nova versao)
 
-## 3.1) Adminer (gerenciar o banco pelo navegador)
+Use isto quando a stack ja esta no ar. Nao passe `seed`.
+
+1. No seu computador, commit e push da `main` nos repos que mudaram (`api`, `view` e/ou `infra`). O deploy na VPS so puxa `main`.
+
+2. Na VPS:
+
+```bash
+cd /opt/fitra/infra
+./deploy.sh prod
+```
+
+O script recusa working tree suja, faz `git pull --ff-only` da `main` em `api`, `view` e `infra`, reconstroi as imagens, sobe os containers e aplica migrations. Nao roda seed. Volumes do Postgres/Redis e o `.env.production` ficam intactos.
+
+Se o `infra` tiver commit novo, o script se reinicia sozinho para usar a versao nova.
+
+3. Conferir:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production ps
+docker compose -f docker-compose.prod.yml --env-file .env.production logs --tail=50 api view
+```
+
+Nao use `./deploy.sh prod seed` em atualizacao: o seed de medidas de exemplo continua ignorado em producao, mas o admin/exercicios/tipos seriam reaplicados sem necessidade.
+
+## 3.2) Adminer (gerenciar o banco pelo navegador)
 
 O Postgres continua acessivel so na rede Docker. O Adminer entra pelo Traefik em
 `https://db.fitra.com.br`, sem publicar `5432` no host.

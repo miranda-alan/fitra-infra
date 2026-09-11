@@ -193,6 +193,10 @@ O script recusa working tree suja, faz `git pull --ff-only` da `main` em `api`, 
 
 Se o `infra` tiver commit novo, o script se reinicia sozinho para usar a versao nova.
 
+A primeira build depois de mudar `Dockerfile` ou `package-lock.json` e lenta: o `npm ci` nao tem cache (foi o caso dos ~5 min com lockfile novo). Nas proximas, com lockfile igual, essa etapa fica em `CACHED` (~0s). O tempo restante e o `next build` / `nest build` so quando o codigo da view ou da api mudou.
+
+Para ver o cache sem mudar codigo, rode de novo `./deploy.sh prod`. O build deve cair para segundos se nada mudou nos contextos.
+
 3. Conferir:
 
 ```bash
